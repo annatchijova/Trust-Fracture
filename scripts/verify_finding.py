@@ -12,7 +12,7 @@ disagreement is itself a finding: treat it as a determinism defect to
 investigate, not as "pick whichever answer you prefer."
 
 Usage: python3 scripts/verify_finding.py <finding.json>
-Exit code 0 if the digest matches the payload, 1 otherwise.
+Exit code 0 for a matching v1 seal, 1 for invalid input or mismatch, 2 for usage.
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ import hashlib
 import json
 import sys
 from typing import Any
+
+SUPPORTED_CANONICALIZE_VERSION = "1"
 
 
 def encode(value: Any) -> str:
@@ -49,12 +51,23 @@ def main(argv: list[str]) -> int:
         print(f"usage: {argv[0]} <finding.json>", file=sys.stderr)
         return 2
 
-    with open(argv[1], encoding="utf-8") as f:
-        sealed = json.load(f)
+    try:
+        with open(argv[1], encoding="utf-8") as f:
+            sealed = json.load(f)
+        if not isinstance(sealed, dict):
+            raise ValueError("expected a JSON object")
+        version = sealed.get("canonicalize_version")
+        if version != SUPPORTED_CANONICALIZE_VERSION:
+            raise ValueError(f"unsupported or missing canonicalization version: {version!r}")
+        payload = sealed.get("payload")
+        claimed_digest = sealed.get("digest")
+        if not isinstance(payload, dict) or not isinstance(claimed_digest, str):
+            raise ValueError("expected an object payload and a string digest")
+        canonical_bytes = encode(payload).encode("utf-8")
+    except (OSError, ValueError, RecursionError) as exc:
+        print(f"INVALID: {exc}", file=sys.stderr)
+        return 1
 
-    payload = sealed["payload"]
-    claimed_digest = sealed["digest"]
-    canonical_bytes = encode(payload).encode("utf-8")
     recomputed_digest = hashlib.sha256(canonical_bytes).hexdigest()
 
     if recomputed_digest == claimed_digest:

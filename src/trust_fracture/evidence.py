@@ -89,11 +89,13 @@ def seal(payload: dict[str, Any], *, sealed_at: str) -> SealedFinding:
 
 
 def verify_seal(sealed: SealedFinding) -> bool:
-    """Recomputes the digest from `sealed.payload` and compares -- never
-    trusts `sealed.digest` as already correct. This lives in the engine
+    """Checks the canonicalization version and recomputes the payload digest.
+    This lives in the engine
     for convenience (e.g. a same-process round-trip test); the actual
     reproducibility contract this project relies on is
     scripts/verify_finding.py, which does this independently of all of
     this module's code.
     """
+    if sealed.canonicalize_version != CANONICALIZE_VERSION:
+        return False
     return hashlib.sha256(canonicalize(sealed.payload)).hexdigest() == sealed.digest
