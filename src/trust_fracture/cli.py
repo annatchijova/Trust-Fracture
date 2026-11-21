@@ -158,7 +158,7 @@ def observe_command(database_path: str, trace_event_id: str, observed_at: str, n
         sys.exit(1)
 
     try:
-        with GraphStore(database_path) as store:
+        with GraphStore(database_path) as store, store.transaction():
             if store.get_node(trace_event_id) is None:
                 store.create_node(NodeType.TRACE_EVENT, trace_event_id, provenance="cli-observe")
             for index, node_id in enumerate(node_ids):

@@ -9,7 +9,8 @@ normalization) or evaluate rules (layer 5).
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -76,6 +77,23 @@ class GraphStore:
 
     def close(self) -> None:
         self._db.close()
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Commit related statements together on this store's connection."""
+        if not self._db.autocommit:
+            raise GraphStoreError("nested graph transactions are unsupported")
+        self._db.autocommit = False
+        try:
+            yield
+            self._db.commit()
+        except BaseException:
+            self._db.rollback()
+            # Enabling autocommit can commit an open transaction.
+            self._db.autocommit = True
+            raise
+        else:
+            self._db.autocommit = True
 
     def create_node(
         self,
