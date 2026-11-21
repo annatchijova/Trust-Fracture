@@ -90,6 +90,44 @@ def test_create_node_rejects_reserved_property_keys(tmp_path: Path) -> None:
             )
 
 
+def test_create_relationship_rejects_ambiguous_duplicate_id(tmp_path: Path) -> None:
+    """Regression for the Level 2 red-team finding: MATCH (a {id: $sid}),
+    (b {id: $tid}) used to resolve ambiguously when two nodes of
+    different types shared an id, and CREATE ran once per match --
+    silently writing one relationship per collision."""
+    with GraphStore(tmp_path / "level1.rl") as store:
+        store.create_node(NodeType.AGENT, "shared-id", provenance="unit-test")
+        store.create_node(NodeType.RESOURCE, "shared-id", provenance="unit-test")
+        store.create_node(NodeType.OPERATION, "op-1", provenance="unit-test")
+
+        with pytest.raises(GraphStoreError):
+            store.create_relationship(
+                RelationshipType.TARGETS,
+                "op-1",
+                "shared-id",
+                relationship_id="r1",
+                epistemic_status=EpistemicStatus.FACT,
+                provenance="unit-test",
+            )
+
+        rows = list(store._db.execute("MATCH ()-[r:TARGETS]->() RETURN r"))
+        assert len(rows) == 0
+
+
+def test_create_relationship_rejects_nonexistent_node(tmp_path: Path) -> None:
+    with GraphStore(tmp_path / "level1.rl") as store:
+        store.create_node(NodeType.AGENT, "agent-1", provenance="unit-test")
+        with pytest.raises(GraphStoreError):
+            store.create_relationship(
+                RelationshipType.INVOKES,
+                "agent-1",
+                "does-not-exist",
+                relationship_id="r1",
+                epistemic_status=EpistemicStatus.FACT,
+                provenance="unit-test",
+            )
+
+
 def test_observed_in_requires_fact_and_observed_at(tmp_path: Path) -> None:
     with GraphStore(tmp_path / "level1.rl") as store:
         store.create_node(NodeType.TRACE_EVENT, "trace-1", provenance="unit-test")

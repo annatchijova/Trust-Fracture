@@ -28,6 +28,8 @@ from trust_fracture.schema import RelationshipType
 class AuthorityAssessment:
     actor_id: str
     operation_id: str
+    actor_exists: bool
+    operation_exists: bool
     required_permission_ids: tuple[str, ...]
     held_permission_ids: tuple[str, ...]
     missing_permission_ids: tuple[str, ...]
@@ -43,6 +45,26 @@ class AuthorityAssessment:
 
     @property
     def note(self) -> str:
+        if not self.actor_exists or not self.operation_exists:
+            # Confirmed by the Level 2 red-team review: without this
+            # branch, a nonexistent actor_id/operation_id silently
+            # produced a confident-sounding positive assessment (zero
+            # required permissions, zero held, vacuously "possesses all
+            # required") instead of an honest INSUFFICIENT_EVIDENCE.
+            missing_entities = [
+                label
+                for label, exists in (
+                    (f"actor {self.actor_id!r}", self.actor_exists),
+                    (f"operation {self.operation_id!r}", self.operation_exists),
+                )
+                if not exists
+            ]
+            return (
+                "INSUFFICIENT_EVIDENCE: "
+                + " and ".join(missing_entities)
+                + " not found in the graph -- no authority assessment can be made "
+                "(docs/EPISTEMIC_MODEL.md)."
+            )
         if not self.possesses_all_required_permissions:
             return (
                 f"{self.actor_id} is missing {len(self.missing_permission_ids)} "
@@ -69,14 +91,31 @@ class AuthorityAssessment:
 def analyze_authority(
     store: GraphStore, actor_id: str, operation_id: str
 ) -> AuthorityAssessment:
-    required = store.outgoing_related_ids(operation_id, RelationshipType.REQUIRES_PERMISSION)
-    held = store.outgoing_related_ids(actor_id, RelationshipType.HAS_PERMISSION)
+    actor_exists = store.get_node(actor_id) is not None
+    operation_exists = store.get_node(operation_id) is not None
+
+    required = (
+        store.outgoing_related_ids(operation_id, RelationshipType.REQUIRES_PERMISSION)
+        if operation_exists
+        else ()
+    )
+    held = (
+        store.outgoing_related_ids(actor_id, RelationshipType.HAS_PERMISSION)
+        if actor_exists
+        else ()
+    )
     held_set = set(held)
     missing = tuple(permission_id for permission_id in required if permission_id not in held_set)
-    governing = store.outgoing_related_ids(operation_id, RelationshipType.GOVERNED_BY)
+    governing = (
+        store.outgoing_related_ids(operation_id, RelationshipType.GOVERNED_BY)
+        if operation_exists
+        else ()
+    )
     return AuthorityAssessment(
         actor_id=actor_id,
         operation_id=operation_id,
+        actor_exists=actor_exists,
+        operation_exists=operation_exists,
         required_permission_ids=required,
         held_permission_ids=held,
         missing_permission_ids=missing,

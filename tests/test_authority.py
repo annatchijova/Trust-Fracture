@@ -48,6 +48,21 @@ def test_actor_holds_permission_with_no_governing_policy(tmp_path: Path) -> None
     assert "not, by itself, evidence" in assessment.note
 
 
+def test_nonexistent_actor_and_operation_report_insufficient_evidence(tmp_path: Path) -> None:
+    """Regression for the Level 2 red-team finding: a nonexistent
+    actor/operation used to produce a confidently-worded positive
+    assessment ("holds every permission required") instead of an honest
+    INSUFFICIENT_EVIDENCE."""
+    with GraphStore(tmp_path / "level2.rl") as store:
+        assessment = analyze_authority(store, "ghost-agent", "ghost-operation")
+
+    assert not assessment.actor_exists
+    assert not assessment.operation_exists
+    assert "INSUFFICIENT_EVIDENCE" in assessment.note
+    assert "ghost-agent" in assessment.note
+    assert "ghost-operation" in assessment.note
+
+
 def test_actor_holds_permission_and_operation_is_governed(tmp_path: Path) -> None:
     with GraphStore(tmp_path / "level2.rl") as store:
         _create(store, NodeType.AGENT, "agent-1")

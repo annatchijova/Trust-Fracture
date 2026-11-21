@@ -110,6 +110,19 @@ class GraphStore:
             params,
         )
 
+    def _require_exactly_one_node(self, node_id: str) -> None:
+        count = self._db.execute(
+            "MATCH (n {id: $id}) RETURN count(n) AS n", {"id": node_id}
+        ).single()["n"]
+        if count == 0:
+            raise GraphStoreError(f"no node with id {node_id!r} exists")
+        if count > 1:
+            raise GraphStoreError(
+                f"id {node_id!r} matches {count} nodes -- ids must be "
+                "globally unique (docs/GRAPH_MODEL.md); refusing to create "
+                "a relationship that would silently fan out across all of them"
+            )
+
     def create_relationship(
         self,
         rel_type: RelationshipType,
@@ -131,6 +144,18 @@ class GraphStore:
                     f"epistemic_status={epistemic_status.value!r}, "
                     f"observed_at={observed_at!r}"
                 )
+
+        # Confirmed by the Level 2 red-team review: without this check,
+        # MATCH (a {id: $sid}), (b {id: $tid}) resolves ambiguously when
+        # ids collide across node types (nothing in GraphStore itself
+        # enforces global id uniqueness -- only normalization.py's
+        # scenario-ingestion path does, which Level 2+ engine code calling
+        # this method directly does not go through), and the subsequent
+        # CREATE then runs once per matched (a, b) pair -- silently
+        # writing one relationship per collision instead of the single
+        # edge the caller asked for.
+        self._require_exactly_one_node(source_id)
+        self._require_exactly_one_node(target_id)
 
         params: dict[str, Scalar] = {
             "sid": source_id,
