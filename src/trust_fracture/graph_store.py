@@ -12,6 +12,7 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 from types import TracebackType
+from typing import Any
 
 import relate
 
@@ -164,6 +165,69 @@ class GraphStore:
         count = row["n"]
         assert isinstance(count, int)
         return count
+
+    # Hard ceiling on bounded-reachability hop counts, independent of
+    # whatever max_hops a Level 2 caller requests. Relate itself allows up
+    # to 2000 (--max-traversal-depth); this project's own cap is far
+    # tighter because the explicit design decision deferred in
+    # docs/GRAPH_MODEL.md is now made here: the scenario corpus (Level 4)
+    # is tens of nodes, not a production-scale graph, and an investigator
+    # asking "is X reachable from Y" has no use for a path the Cypher
+    # planner had to search 500 hops to find in a graph this small --
+    # that signals a malformed query, not a deep investigation.
+    MAX_ALLOWED_HOPS = 20
+
+    def paths_between(
+        self,
+        source_id: str,
+        target_id: str,
+        *,
+        max_hops: int,
+        relationship_types: frozenset[RelationshipType],
+    ) -> list[dict[str, Any]]:
+        """Bounded-reachability raw path fetch, restricted to
+        `relationship_types` and traversed without regard to each edge's
+        stored direction (see schema.PROPAGATION_RELATIONSHIP_TYPES for
+        why: stored direction encodes who acted, not which way influence
+        could propagate). Returns each path in relate's lossless
+        `Path.to_dict()` shape -- callers (query.py) turn this into a
+        typed, epistemically-labeled result; this method does not
+        interpret or label anything, per docs/ARCHITECTURE.md's layer
+        split between persistence (3) and query (4).
+        """
+        if not isinstance(max_hops, int) or not (1 <= max_hops <= self.MAX_ALLOWED_HOPS):
+            raise GraphStoreError(
+                f"max_hops must be an integer between 1 and {self.MAX_ALLOWED_HOPS}, "
+                f"got {max_hops!r}"
+            )
+        if not relationship_types:
+            raise GraphStoreError("relationship_types must be non-empty")
+        # relationship_types comes from a closed enum (schema.RelationshipType)
+        # and max_hops is validated as a bounded int above -- both safe to
+        # interpolate. Cypher's variable-length pattern bound is not
+        # parameterizable (confirmed empirically: relate, like standard
+        # Cypher, requires a literal integer range here).
+        type_pattern = "|".join(rel_type.value for rel_type in relationship_types)
+        cursor = self._db.execute(
+            "MATCH p = (src {id: $source_id})-[:%s*1..%d]-(dst {id: $target_id}) RETURN p"
+            % (type_pattern, max_hops),
+            {"source_id": source_id, "target_id": target_id},
+        )
+        return [row["p"].to_dict() for row in cursor]
+
+    def outgoing_related_ids(
+        self, node_id: str, rel_type: RelationshipType
+    ) -> tuple[str, ...]:
+        """The `id` of every node reachable from `node_id` by one outgoing
+        `rel_type` edge. Used by authority.py for REQUIRES_PERMISSION,
+        HAS_PERMISSION, and GOVERNED_BY -- a single generic query rather
+        than three near-identical ones, since all three are "one hop,
+        fixed relationship type, return the neighbor's id"."""
+        cursor = self._db.execute(
+            f"MATCH (a {{id: $id}})-[:{rel_type.value}]->(b) RETURN b.id AS id",
+            {"id": node_id},
+        )
+        return tuple(row["id"] for row in cursor)
 
     def get_node(self, node_id: str) -> dict[str, Scalar] | None:
         # relate's Cursor.single() raises ResultNotSingleError on zero rows

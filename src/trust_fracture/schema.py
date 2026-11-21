@@ -85,3 +85,33 @@ NON_INGESTIBLE_RELATIONSHIP_TYPES = frozenset(
         RelationshipType.SUPPORTED_BY,
     }
 )
+
+# Relationship types a bounded-reachability investigation (Level 2,
+# query.find_bounded_paths) treats as capable of carrying influence from
+# one node to another. Deliberately excludes authority/epistemic-
+# management edges -- REQUIRES_PERMISSION, HAS_PERMISSION, GOVERNED_BY,
+# CROSSES_BOUNDARY, OBSERVED_IN, SUPPORTED_BY, DERIVED_FROM -- which
+# describe facts *about* the graph's entities, not a channel influence
+# could travel through; including them would let the reachability query
+# report a "path" that walks through permission/policy bookkeeping nodes
+# instead of a real investigative chain.
+#
+# These edges are also traversed without regard to their stored direction
+# (see graph_store.GraphStore.paths_between): stored direction encodes who
+# performed the action (e.g. READS is stored agent->datasource, "the
+# agent reads the source"), not which way adversarial influence could
+# propagate (content -> agent). Treating direction as significant here
+# was tried first and produced a false negative on exactly the scenario
+# shape this project exists to investigate (an agent reading untrusted
+# content) -- see the Level 2 build history. This is a deliberate
+# simplification, not a claim that propagation direction never matters;
+# a more direction-aware model is deferred, not silently assumed correct.
+PROPAGATION_RELATIONSHIP_TYPES = frozenset(
+    {
+        RelationshipType.READS,
+        RelationshipType.PRODUCES,
+        RelationshipType.CONTAINS,
+        RelationshipType.INVOKES,
+        RelationshipType.TARGETS,
+    }
+)
