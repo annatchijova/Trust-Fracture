@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    {"type": "Agent", "id": "agent-1", "provenance": "test-fixture", "properties": {"name": "demo-agent"}},
+    {"type": "Tool", "id": "tool-1", "provenance": "test-fixture", "properties": {"name": "demo-tool"}}
+  ],
+  "relationships": [
+    {
+      "type": "INVOKES",
+      "id": "rel-1",
+      "source": "agent-1",
+      "target": "tool-1",
+      "epistemic_status": "derived",
+      "provenance": "test-fixture"
+    }
+  ]
+}
