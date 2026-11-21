@@ -25,6 +25,15 @@ from typing import Any
 SUPPORTED_CANONICALIZE_VERSION = "1"
 
 
+def unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    members: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in members:
+            raise ValueError("duplicate JSON object member")
+        members[key] = value
+    return members
+
+
 def encode(value: Any) -> str:
     if isinstance(value, bool):
         return "b:" + ("1" if value else "0")
@@ -53,7 +62,7 @@ def main(argv: list[str]) -> int:
 
     try:
         with open(argv[1], encoding="utf-8") as f:
-            sealed = json.load(f)
+            sealed = json.load(f, object_pairs_hook=unique_json_object)
         if not isinstance(sealed, dict):
             raise ValueError("expected a JSON object")
         version = sealed.get("canonicalize_version")
