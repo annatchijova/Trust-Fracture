@@ -66,3 +66,22 @@ OBSERVATION_ONLY_TYPES = frozenset(
         RelationshipType.OBSERVED_IN,
     }
 )
+
+# Relationship types docs/GRAPH_MODEL.md classifies as "Derived, ... never
+# asserted by hand": they exist only once the engine has actually computed
+# them (boundary evaluation, path derivation, evidence assembly), none of
+# which is built before Level 2/3. A scenario file -- the untrusted-content
+# channel in docs/THREAT_MODEL.md -- must never be able to declare one of
+# these directly as a hand-entered fact; confirmed reachable in the Level 1
+# red-team review before this set existed. Enforced by
+# normalization.normalize_scenario, not by GraphStore, since this is a
+# restriction on what scenario *ingestion* may claim, not on what the
+# engine itself may later write once it has actually derived the edge.
+NON_INGESTIBLE_RELATIONSHIP_TYPES = frozenset(
+    {
+        RelationshipType.OBSERVED_IN,
+        RelationshipType.CROSSES_BOUNDARY,
+        RelationshipType.DERIVED_FROM,
+        RelationshipType.SUPPORTED_BY,
+    }
+)

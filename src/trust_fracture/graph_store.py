@@ -8,6 +8,7 @@ normalization) or evaluate rules (layer 5).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from types import TracebackType
@@ -25,11 +26,28 @@ from trust_fracture.schema import (
 Scalar = str | int | float | bool | None
 Properties = Mapping[str, Scalar]
 
+# Property keys are spliced into Cypher statement text (see create_node) --
+# Relate's parameter binding covers values, never map keys. A key outside
+# this shape is rejected before it reaches the query string, closing the
+# Cypher-injection path confirmed in the Level 1 red-team review (a crafted
+# key such as "a:1}) MATCH (v) DETACH DELETE v //" otherwise breaks out of
+# the property map).
+_SAFE_PROPERTY_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# Reserved node metadata fields the trusted layers attach at creation time
+# (docs/GRAPH_MODEL.md "Metadata on every relevant relationship" /
+# docs/ARCHITECTURE.md layer 2). A scenario-supplied property under one of
+# these names must never be allowed to silently win a dict-merge against
+# the caller-supplied, trusted value -- confirmed reachable in the Level 1
+# red-team review.
+_RESERVED_NODE_FIELDS = frozenset({"id", "provenance", "schema_version"})
+
 
 class GraphStoreError(ValueError):
-    """Raised when a caller tries to persist a relationship that violates
-    the epistemic classification rules in docs/GRAPH_MODEL.md, before any
-    write reaches Relate."""
+    """Raised when a caller tries to persist a node or relationship that
+    violates the epistemic classification rules in docs/GRAPH_MODEL.md, or
+    supplies a property key that is unsafe or reserved, before any write
+    reaches Relate."""
 
 
 class GraphStore:
@@ -66,6 +84,19 @@ class GraphStore:
         *,
         provenance: str,
     ) -> None:
+        for key in properties:
+            if key in _RESERVED_NODE_FIELDS:
+                raise GraphStoreError(
+                    f"property key {key!r} is reserved for trusted metadata "
+                    "attached at creation time and cannot be supplied as a "
+                    "scenario property (docs/GRAPH_MODEL.md)"
+                )
+            if not _SAFE_PROPERTY_KEY.match(key):
+                raise GraphStoreError(
+                    f"property key {key!r} is not a safe identifier "
+                    f"(must match {_SAFE_PROPERTY_KEY.pattern})"
+                )
+
         params: dict[str, Scalar] = {
             "id": node_id,
             "provenance": provenance,

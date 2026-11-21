@@ -81,3 +81,17 @@ def test_missing_provenance_rejected() -> None:
     del scenario["nodes"][0]["provenance"]
     with pytest.raises(NormalizationError):
         normalize_scenario(scenario, source="test")
+
+
+def test_derived_only_relationship_type_rejected_from_scenario_input() -> None:
+    """Regression for the Level 1 red-team finding: a scenario file could
+    declare CROSSES_BOUNDARY/DERIVED_FROM/SUPPORTED_BY/OBSERVED_IN directly
+    as a hand-asserted fact, even though docs/GRAPH_MODEL.md classifies
+    them as derived-only -- they must exist only once the engine itself
+    has computed or observed them, never as ingested scenario content."""
+    scenario = _base_scenario()
+    scenario["nodes"].append({"type": "TrustBoundary", "id": "boundary-1", "provenance": "p"})
+    scenario["relationships"][0]["type"] = "CROSSES_BOUNDARY"
+    scenario["relationships"][0]["target"] = "boundary-1"
+    with pytest.raises(NormalizationError):
+        normalize_scenario(scenario, source="test")

@@ -15,7 +15,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, TypeVar
 
-from trust_fracture.schema import EpistemicStatus, NodeType, RelationshipType
+from trust_fracture.schema import (
+    NON_INGESTIBLE_RELATIONSHIP_TYPES,
+    EpistemicStatus,
+    NodeType,
+    RelationshipType,
+)
 
 EnumT = TypeVar("EnumT", bound=Enum)
 
@@ -112,6 +117,13 @@ def normalize_scenario(raw: dict[str, Any], *, source: str) -> ScenarioGraph:
             raise NormalizationError(f"{context}: duplicate relationship id {rel_id!r}")
         seen_rel_ids.add(rel_id)
         rel_type = _require_enum(raw_rel.get("type"), RelationshipType, "type", context)
+        if rel_type in NON_INGESTIBLE_RELATIONSHIP_TYPES:
+            raise NormalizationError(
+                f"{context}: {rel_type.value} cannot be declared by a scenario "
+                "file -- it exists only once the engine has actually derived "
+                "or observed it (docs/GRAPH_MODEL.md), not as a hand-asserted "
+                "fact in ingested input"
+            )
         source_id = _require_str(raw_rel.get("source"), "source", context)
         target_id = _require_str(raw_rel.get("target"), "target", context)
         if source_id not in seen_ids:

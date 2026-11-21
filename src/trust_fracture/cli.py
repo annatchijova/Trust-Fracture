@@ -11,7 +11,7 @@ import sys
 
 import click
 
-from trust_fracture.graph_store import GraphStore
+from trust_fracture.graph_store import GraphStore, GraphStoreError
 from trust_fracture.ingestion import IngestionError
 from trust_fracture.loader import load_scenario_into_store
 from trust_fracture.normalization import NormalizationError
@@ -38,7 +38,7 @@ def load_command(scenario_file: str, database_path: str) -> None:
     try:
         with GraphStore(database_path) as store:
             graph = load_scenario_into_store(scenario_file, store)
-    except (IngestionError, NormalizationError) as exc:
+    except (IngestionError, NormalizationError, GraphStoreError) as exc:
         click.echo(f"error: {exc}", err=True)
         sys.exit(1)
 

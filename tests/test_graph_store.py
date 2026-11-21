@@ -49,6 +49,47 @@ def test_get_node_returns_none_for_missing_id(tmp_path: Path) -> None:
         assert store.get_node("does-not-exist") is None
 
 
+def test_create_node_rejects_unsafe_property_key(tmp_path: Path) -> None:
+    """Regression for the Level 1 red-team finding: a crafted property key
+    could splice arbitrary Cypher into create_node's query text and delete
+    an unrelated node. The attack must now be rejected before any write."""
+    with GraphStore(tmp_path / "level1.rl") as store:
+        store.create_node(NodeType.AGENT, "victim", provenance="setup")
+
+        malicious_key = "a:1}) MATCH (v:Agent {id:'victim'}) DETACH DELETE v //"
+        with pytest.raises(GraphStoreError):
+            store.create_node(
+                NodeType.AGENT,
+                "attacker-node",
+                {malicious_key: "payload"},
+                provenance="attacker-controlled scenario file",
+            )
+
+        assert store.count_nodes(NodeType.AGENT) == 1
+        assert store.get_node("victim") is not None
+
+
+def test_create_node_rejects_reserved_property_keys(tmp_path: Path) -> None:
+    """Regression for the Level 1 red-team finding: a scenario-supplied
+    'provenance' or 'schema_version' property used to silently win a
+    dict-merge against the trusted, caller-supplied value."""
+    with GraphStore(tmp_path / "level1.rl") as store:
+        with pytest.raises(GraphStoreError):
+            store.create_node(
+                NodeType.AGENT,
+                "agent-1",
+                {"provenance": "forged-by-scenario-author"},
+                provenance="legit-ingestion-provenance",
+            )
+        with pytest.raises(GraphStoreError):
+            store.create_node(
+                NodeType.AGENT,
+                "agent-2",
+                {"schema_version": "999-forged"},
+                provenance="legit-ingestion-provenance",
+            )
+
+
 def test_observed_in_requires_fact_and_observed_at(tmp_path: Path) -> None:
     with GraphStore(tmp_path / "level1.rl") as store:
         store.create_node(NodeType.TRACE_EVENT, "trace-1", provenance="unit-test")
