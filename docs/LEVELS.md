@@ -114,7 +114,12 @@ and sealed; no retrofit onto existing data was needed.
 
 ## Level 4 — Scenario corpus
 
-**Status: Not started**
+**Status: In progress.** The six negative controls run with
+`python -m pytest -q tests/test_negative_controls.py`. They use a synthetic
+catalog graph, the live Relate store, and the independent seal verifier.
+The blocked case records a synthetic denial and has a partially observed
+route with a `POTENTIAL_PATH` finding. Control effectiveness requires
+additional evidence.
 
 The three investigation scenarios (tool-output injection, retrieved-document
 injection, confused deputy), each with a vulnerable and a protected variant,
