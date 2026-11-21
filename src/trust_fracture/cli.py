@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import click
 
@@ -153,14 +154,16 @@ def observe_command(database_path: str, trace_event_id: str, observed_at: str, n
     """Record a real TraceEvent and link the nodes observed together in
     it (docs/EPISTEMIC_MODEL.md, B -> C evidence). This is the only
     command that lets a path be promoted past structural possibility."""
-    if len(node_ids) < 2:
-        click.echo("error: --node must be supplied at least twice", err=True)
+    if len(node_ids) < 2 or len(set(node_ids)) != len(node_ids):
+        click.echo("error: --node requires at least two distinct IDs without repeats", err=True)
         sys.exit(1)
 
     try:
         with GraphStore(database_path) as store, store.transaction():
             if store.get_node(trace_event_id) is None:
                 store.create_node(NodeType.TRACE_EVENT, trace_event_id, provenance="cli-observe")
+            elif store.has_trace_members(trace_event_id):
+                raise GraphStoreError(f"TraceEvent {trace_event_id!r} already has observation members")
             for index, node_id in enumerate(node_ids):
                 store.create_relationship(
                     RelationshipType.OBSERVED_IN,
@@ -222,8 +225,15 @@ def seal_finding_command(
     sealed = seal(finding.to_payload(), sealed_at=sealed_at)
     output = json.dumps(sealed.to_json_dict(), indent=2, sort_keys=True)
 
-    if out_path:
-        with open(out_path, "w", encoding="utf-8") as f:
+    if out_path and out_path != "-":
+        destination = Path(out_path)
+        try:
+            aliases_database = destination.samefile(database_path)
+        except FileNotFoundError:
+            aliases_database = False
+        if aliases_database:
+            raise click.ClickException("finding output must differ from the evidence database")
+        with click.open_file(out_path, "w", encoding="utf-8", atomic=True) as f:
             f.write(output)
         click.echo(f"Sealed finding ({finding.epistemic_state.value}) written to {out_path}")
     else:

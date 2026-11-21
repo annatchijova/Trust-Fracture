@@ -108,7 +108,7 @@ def test_fully_observed_path_without_authority_gap_is_observed_flow(tmp_path: Pa
     assert finding.epistemic_state is EpistemicState.OBSERVED_FLOW
 
 
-def test_observed_path_with_authority_gap_and_policy_is_verified_violation(
+def test_observed_path_with_authority_gap_needs_explicit_breach_evidence(
     tmp_path: Path,
 ) -> None:
     with GraphStore(tmp_path / "level3.rl") as store:
@@ -124,9 +124,10 @@ def test_observed_path_with_authority_gap_and_policy_is_verified_violation(
             store, result, actor_id="agent-1", operation_id="op-1", finding_id="f1"
         )
 
-    assert finding.epistemic_state is EpistemicState.VERIFIED_POLICY_VIOLATION
-    assert "perm-1" in finding.reasons[1]
-    assert "policy-1" in finding.reasons[2]
+    assert finding.epistemic_state is EpistemicState.OBSERVED_FLOW
+    assert "perm-1" in finding.reasons[0]
+    assert "policy-1" in finding.reasons[1]
+    assert "explicit execution and applicable policy breach evidence" in finding.reasons[2]
     assert set(finding.trace_event_ids) == {"trace-1", "trace-2", "trace-3", "trace-4"}
 
 

@@ -1,13 +1,9 @@
 """Level 3, part 2: the epistemic state machine and sealed findings.
 
-Per docs/EPISTEMIC_MODEL.md's promotion rules: this module is the only
-place a path's state can be promoted past Level 2's fixed
-`structural_possibility` (state B). Every promotion requires the specific
-evidence the model names, never temporal order or plausibility alone --
-see classify_path_observation (B -> C) and assess_policy_violation
-(C -> D) for exactly what each one checks. No LLM is involved anywhere in
-this module (CLAUDE.md 5.1): everything here is fixed code evaluating
-structural facts already persisted in Relate.
+Trace observations can promote a route from structural possibility to
+observed flow. Policy violations require explicit execution and breach
+evidence beyond the current graph model. The assessment uses fixed
+rules over records persisted in Relate.
 """
 
 from __future__ import annotations
@@ -66,16 +62,11 @@ def assess_policy_violation(
     actor_id: str,
     operation_id: str,
 ) -> PathAssessment:
-    """C -> D, per docs/EPISTEMIC_MODEL.md: a verified policy violation
-    requires evidence linking, together, behavior (TraceEvent-backed
-    observation of this path), operation, the authority it required, and
-    the specific policy violated. This is derived structurally -- an
-    observed invocation of an operation the actor lacked a required
-    permission for, where that operation is on record as governed by an
-    explicit policy -- never from a semantic judgment about what the
-    policy's text means. Any missing piece caps the result at
-    INSUFFICIENT_EVIDENCE with the specific gap named, never silently
-    falls back to a weaker state without saying why.
+    """Collect authority context and explain gaps in policy breach evidence.
+
+    Co-observation and a structural authority gap identify a route to
+    investigate. Verifying a violation also requires evidence of execution
+    and a breach of an applicable policy.
     """
     reasons: list[str] = []
     trace_event_ids: set[str] = set()
@@ -106,21 +97,17 @@ def assess_policy_violation(
     elif not authority.is_governed:
         reasons.append(f"{operation_id} is not GOVERNED_BY any policy on record")
 
-    if reasons:
-        return PathAssessment(
-            state=EpistemicState.INSUFFICIENT_EVIDENCE,
-            reasons=tuple(reasons),
-            trace_event_ids=tuple(sorted(trace_event_ids)),
-        )
+    if not reasons:
+        reasons.extend((
+            f"{actor_id} lacks permission(s) {operation_id} requires: "
+            f"{', '.join(sorted(authority.missing_permission_ids))}",
+            f"{operation_id} is GOVERNED_BY: {', '.join(sorted(authority.governing_policy_ids))}",
+            "explicit execution and applicable policy breach evidence is required to verify a violation",
+        ))
 
     return PathAssessment(
-        state=EpistemicState.VERIFIED_POLICY_VIOLATION,
-        reasons=(
-            "every edge on the path is backed by a TraceEvent (OBSERVED_FLOW)",
-            f"{actor_id} is missing permission(s) {operation_id} requires: "
-            f"{', '.join(authority.missing_permission_ids)}",
-            f"{operation_id} is GOVERNED_BY: {', '.join(authority.governing_policy_ids)}",
-        ),
+        state=EpistemicState.INSUFFICIENT_EVIDENCE,
+        reasons=tuple(reasons),
         trace_event_ids=tuple(sorted(trace_event_ids)),
     )
 
@@ -213,8 +200,11 @@ def build_finding(
         candidate_path_node_ids = tuple(node.node_id for node in path.nodes)
         candidate_trace_event_ids = assessment.trace_event_ids
 
-        if best is None or _STATE_ORDER[candidate_state] > _STATE_ORDER[best[0]]:
-            best = (candidate_state, candidate_reasons, candidate_path_node_ids, candidate_trace_event_ids)
+        candidate = (candidate_state, candidate_reasons, candidate_path_node_ids, candidate_trace_event_ids)
+        if best is None:
+            best = candidate
+        elif (-_STATE_ORDER[candidate_state], *candidate[1:]) < (-_STATE_ORDER[best[0]], *best[1:]):
+            best = candidate
 
     assert best is not None  # path_result.paths is non-empty here
     best_state, best_reasons, best_path_node_ids, best_trace_event_ids = best

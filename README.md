@@ -14,7 +14,7 @@ Trust Fracture is a CLI for investigating those questions. Give it a description
 | --- | --- |
 | `POTENTIAL_PATH` | A structural route with incomplete or absent trace backing. |
 | `OBSERVED_FLOW` | Trace events back every link in a route. |
-| `VERIFIED_POLICY_VIOLATION` | An observed route meets the engine's modeled conditions for an authority gap on a policy-governed operation. |
+| `VERIFIED_POLICY_VIOLATION` | Reserved for explicit evidence of execution and breach of an applicable policy. The current engine reports an observed flow with any authority gap it finds. |
 | `INSUFFICIENT_EVIDENCE` | The bounded search returned no route to assess. |
 
 The rules run without a language model. The JSON finding includes the selected route, supporting trace IDs, reasons, and limitations. An independent, standard-library-only verifier checks the SHA-256 digest of the canonical payload. The digest covers payload integrity, while trace provenance depends on the source records. [Evidence model](docs/EPISTEMIC_MODEL.md)

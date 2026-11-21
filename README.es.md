@@ -14,7 +14,7 @@ Trust Fracture es una herramienta de línea de comandos para investigar esas pre
 | --- | --- |
 | `POTENTIAL_PATH` | Una ruta estructural con respaldo de trazas parcial o ausente. |
 | `OBSERVED_FLOW` | Hay eventos de traza que respaldan todos los enlaces de la ruta. |
-| `VERIFIED_POLICY_VIOLATION` | Una ruta observada cumple las condiciones del modelo para una falta de autoridad en una operación regida por una política. |
+| `VERIFIED_POLICY_VIOLATION` | Reservado para casos con evidencia explícita de ejecución e infracción de una política aplicable. El motor actual informa el flujo observado y las brechas de autoridad que encuentra. |
 | `INSUFFICIENT_EVIDENCE` | La búsqueda acotada no encontró una ruta para evaluar. |
 
 Las reglas se ejecutan sin un modelo de lenguaje. El JSON del hallazgo incluye la ruta seleccionada, los identificadores de las trazas que la respaldan, los motivos y las limitaciones. Un verificador independiente, escrito con la biblioteca estándar de Python, comprueba el SHA-256 del contenido canonizado. El digest cubre la integridad del contenido sellado y la procedencia de la traza depende de los registros de origen. [Modelo de evidencia](docs/EPISTEMIC_MODEL.md)

@@ -291,6 +291,13 @@ class GraphStore:
         )
         return tuple(row["id"] for row in cursor)
 
+    def has_trace_members(self, trace_event_id: str) -> bool:
+        row = self._db.execute(
+            "MATCH ()-[:OBSERVED_IN]->(t:TraceEvent {id: $id}) RETURN count(t) AS n",
+            {"id": trace_event_id},
+        ).single()
+        return bool(row["n"])
+
     def common_trace_events(self, node_a_id: str, node_b_id: str) -> tuple[str, ...]:
         """Every TraceEvent id that both `node_a_id` and `node_b_id` are
         OBSERVED_IN -- the structural backing Level 3's promotion rule
@@ -300,7 +307,9 @@ class GraphStore:
         """
         cursor = self._db.execute(
             "MATCH (a {id: $a})-[:OBSERVED_IN]->(t:TraceEvent)<-[:OBSERVED_IN]-(b {id: $b}) "
-            "RETURN DISTINCT t.id AS id",
+            "WITH DISTINCT t MATCH ()-[membership:OBSERVED_IN]->(t) "
+            "WITH t, count(membership) AS total, count(DISTINCT membership.id) AS distinct_ids "
+            "WHERE total = distinct_ids RETURN DISTINCT t.id AS id",
             {"a": node_a_id, "b": node_b_id},
         )
         return tuple(row["id"] for row in cursor)
