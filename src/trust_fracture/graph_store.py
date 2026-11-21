@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -162,6 +163,16 @@ class GraphStore:
                     f"epistemic_status={epistemic_status.value!r}, "
                     f"observed_at={observed_at!r}"
                 )
+            timestamp_error = (
+                "observed_at must be an ISO 8601 timestamp with an explicit UTC offset, "
+                f"got {observed_at!r}"
+            )
+            try:
+                timestamp = datetime.fromisoformat(observed_at)
+            except ValueError as exc:
+                raise GraphStoreError(timestamp_error) from exc
+            if timestamp.utcoffset() is None:
+                raise GraphStoreError(timestamp_error)
 
         # Confirmed by the Level 2 red-team review: without this check,
         # MATCH (a {id: $sid}), (b {id: $tid}) resolves ambiguously when
@@ -174,6 +185,14 @@ class GraphStore:
         # edge the caller asked for.
         self._require_exactly_one_node(source_id)
         self._require_exactly_one_node(target_id)
+
+        if rel_type in OBSERVATION_ONLY_TYPES:
+            trace_count = self._db.execute(
+                "MATCH (event:TraceEvent {id: $id}) RETURN count(event) AS n",
+                {"id": target_id},
+            ).single()["n"]
+            if trace_count != 1:
+                raise GraphStoreError(f"{rel_type.value} target {target_id!r} must be a TraceEvent")
 
         params: dict[str, Scalar] = {
             "sid": source_id,

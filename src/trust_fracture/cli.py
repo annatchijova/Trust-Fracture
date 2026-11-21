@@ -140,7 +140,7 @@ def authority_command(database_path: str, actor_id: str, operation_id: str) -> N
 @click.option(
     "--observed-at",
     required=True,
-    help="ISO 8601 timestamp this interaction was actually observed at.",
+    help="ISO 8601 observation timestamp with an explicit UTC offset (such as Z or -03:00).",
 )
 @click.option(
     "--node",
