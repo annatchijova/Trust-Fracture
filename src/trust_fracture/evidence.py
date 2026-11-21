@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -72,17 +73,18 @@ class SealedFinding:
     def to_json_dict(self) -> dict[str, Any]:
         return {
             "canonicalize_version": self.canonicalize_version,
-            "payload": self.payload,
+            "payload": deepcopy(self.payload),
             "digest": self.digest,
             "sealed_at": self.sealed_at,
         }
 
 
 def seal(payload: dict[str, Any], *, sealed_at: str) -> SealedFinding:
-    digest = hashlib.sha256(canonicalize(payload)).hexdigest()
+    snapshot = deepcopy(payload)
+    digest = hashlib.sha256(canonicalize(snapshot)).hexdigest()
     return SealedFinding(
         canonicalize_version=CANONICALIZE_VERSION,
-        payload=payload,
+        payload=snapshot,
         digest=digest,
         sealed_at=sealed_at,
     )
