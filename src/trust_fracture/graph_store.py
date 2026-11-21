@@ -254,6 +254,20 @@ class GraphStore:
         )
         return tuple(row["id"] for row in cursor)
 
+    def common_trace_events(self, node_a_id: str, node_b_id: str) -> tuple[str, ...]:
+        """Every TraceEvent id that both `node_a_id` and `node_b_id` are
+        OBSERVED_IN -- the structural backing Level 3's promotion rule
+        (docs/EPISTEMIC_MODEL.md, B -> C) checks for: an edge between two
+        nodes counts as observed only if a real trace recorded both
+        endpoints together, never from temporal order alone.
+        """
+        cursor = self._db.execute(
+            "MATCH (a {id: $a})-[:OBSERVED_IN]->(t:TraceEvent)<-[:OBSERVED_IN]-(b {id: $b}) "
+            "RETURN DISTINCT t.id AS id",
+            {"a": node_a_id, "b": node_b_id},
+        )
+        return tuple(row["id"] for row in cursor)
+
     def get_node(self, node_id: str) -> dict[str, Scalar] | None:
         # relate's Cursor.single() raises ResultNotSingleError on zero rows
         # (verified empirically against relate-db 1.2.0, not assumed from
