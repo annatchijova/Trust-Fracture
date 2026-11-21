@@ -46,13 +46,17 @@ def _build_scenario(store: GraphStore) -> None:
     )
 
 
-def _observe(store: GraphStore, trace_event_id: str, *node_ids: str, observed_at: str) -> None:
+def _observe(
+    store: GraphStore, trace_event_id: str, *node_ids: str, observed_at: str,
+    edge_id: str | None = None,
+) -> None:
     store.create_node(NodeType.TRACE_EVENT, trace_event_id, provenance="t")
     for index, node_id in enumerate(node_ids):
         store.create_relationship(
             RelationshipType.OBSERVED_IN, node_id, trace_event_id,
             relationship_id=f"{trace_event_id}-{index}",
             epistemic_status=EpistemicStatus.FACT, provenance="t", observed_at=observed_at,
+            observed_relationship_id=edge_id,
         )
 
 
@@ -92,10 +96,10 @@ def test_fully_observed_path_without_authority_gap_is_observed_flow(tmp_path: Pa
             RelationshipType.HAS_PERMISSION, "agent-1", "perm-1",
             relationship_id="r7", epistemic_status=EpistemicStatus.FACT, provenance="t",
         )
-        _observe(store, "trace-1", "doc-1", "agent-1", observed_at="2026-11-21T00:00:00Z")
-        _observe(store, "trace-2", "agent-1", "tool-1", observed_at="2026-11-21T00:00:01Z")
-        _observe(store, "trace-3", "tool-1", "op-1", observed_at="2026-11-21T00:00:02Z")
-        _observe(store, "trace-4", "op-1", "res-1", observed_at="2026-11-21T00:00:03Z")
+        _observe(store, "trace-1", "doc-1", "agent-1", observed_at="2026-11-21T00:00:00Z", edge_id="r1")
+        _observe(store, "trace-2", "agent-1", "tool-1", observed_at="2026-11-21T00:00:01Z", edge_id="r2")
+        _observe(store, "trace-3", "tool-1", "op-1", observed_at="2026-11-21T00:00:02Z", edge_id="r3")
+        _observe(store, "trace-4", "op-1", "res-1", observed_at="2026-11-21T00:00:03Z", edge_id="r4")
 
         result = find_bounded_paths(store, "doc-1", "res-1", max_hops=6)
         path = result.paths[0]
@@ -114,10 +118,10 @@ def test_observed_path_with_authority_gap_needs_explicit_breach_evidence(
     with GraphStore(tmp_path / "level3.rl") as store:
         _build_scenario(store)
         # Deliberately do NOT grant agent-1 perm-1: an authority gap.
-        _observe(store, "trace-1", "doc-1", "agent-1", observed_at="2026-11-21T00:00:00Z")
-        _observe(store, "trace-2", "agent-1", "tool-1", observed_at="2026-11-21T00:00:01Z")
-        _observe(store, "trace-3", "tool-1", "op-1", observed_at="2026-11-21T00:00:02Z")
-        _observe(store, "trace-4", "op-1", "res-1", observed_at="2026-11-21T00:00:03Z")
+        _observe(store, "trace-1", "doc-1", "agent-1", observed_at="2026-11-21T00:00:00Z", edge_id="r1")
+        _observe(store, "trace-2", "agent-1", "tool-1", observed_at="2026-11-21T00:00:01Z", edge_id="r2")
+        _observe(store, "trace-3", "tool-1", "op-1", observed_at="2026-11-21T00:00:02Z", edge_id="r3")
+        _observe(store, "trace-4", "op-1", "res-1", observed_at="2026-11-21T00:00:03Z", edge_id="r4")
 
         result = find_bounded_paths(store, "doc-1", "res-1", max_hops=6)
         finding = build_finding(

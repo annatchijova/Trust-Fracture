@@ -13,7 +13,7 @@ Trust Fracture is a CLI for investigating those questions. Give it a description
 | Result | Evidence the engine found |
 | --- | --- |
 | `POTENTIAL_PATH` | A structural route with incomplete or absent trace backing. |
-| `OBSERVED_FLOW` | Trace events back every link in a route. |
+| `OBSERVED_FLOW` | Trace events explicitly identify each observed relationship in the route. |
 | `VERIFIED_POLICY_VIOLATION` | Reserved for explicit evidence of execution and breach of an applicable policy. The current engine reports an observed flow with any authority gap it finds. |
 | `INSUFFICIENT_EVIDENCE` | The bounded search returned no route to assess. |
 

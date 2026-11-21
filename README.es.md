@@ -13,7 +13,7 @@ Trust Fracture es una herramienta de línea de comandos para investigar esas pre
 | Resultado | Evidencia que encontró el motor |
 | --- | --- |
 | `POTENTIAL_PATH` | Una ruta estructural con respaldo de trazas parcial o ausente. |
-| `OBSERVED_FLOW` | Hay eventos de traza que respaldan todos los enlaces de la ruta. |
+| `OBSERVED_FLOW` | Las trazas identifican explícitamente cada relación observada de la ruta. |
 | `VERIFIED_POLICY_VIOLATION` | Reservado para casos con evidencia explícita de ejecución e infracción de una política aplicable. El motor actual informa el flujo observado y las brechas de autoridad que encuentra. |
 | `INSUFFICIENT_EVIDENCE` | La búsqueda acotada no encontró una ruta para evaluar. |
 

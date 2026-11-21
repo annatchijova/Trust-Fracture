@@ -38,12 +38,12 @@ _STATE_ORDER = {
 
 def classify_path_observation(store: GraphStore, path: StructuralPath) -> EpistemicState:
     """B -> C: a path is OBSERVED_FLOW only if every edge on it has a real
-    TraceEvent backing both its endpoints together. One unbacked edge
-    caps the whole path at POTENTIAL_PATH -- a path is a chain, and an
-    investigator cannot claim the chain was observed end to end from a
-    partial trace."""
+    TraceEvent explicitly backing that relationship. One unbacked edge
+    caps the path at POTENTIAL_PATH. Supporting events may be independent."""
     for edge in path.edges:
-        if not store.common_trace_events(edge.source_id, edge.target_id):
+        if not store.common_trace_events(
+            edge.source_id, edge.target_id, relationship_id=edge.relationship_id,
+        ):
             return EpistemicState.POTENTIAL_PATH
     return EpistemicState.OBSERVED_FLOW
 
@@ -78,7 +78,9 @@ def assess_policy_violation(
         reasons.append(f"{operation_id} is not on this path")
 
     for edge in path.edges:
-        observed_here = store.common_trace_events(edge.source_id, edge.target_id)
+        observed_here = store.common_trace_events(
+            edge.source_id, edge.target_id, relationship_id=edge.relationship_id,
+        )
         trace_event_ids.update(observed_here)
         if not observed_here:
             reasons.append(

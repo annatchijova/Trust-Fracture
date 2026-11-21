@@ -24,6 +24,7 @@ class NegativeControl:
     observations: tuple[tuple[str, ...], ...] = ()
     supporting_traces: tuple[int, ...] = ()
     max_hops: int = 6
+    observed_edges: tuple[str, ...] = ()
 
 
 CASES = (
@@ -32,15 +33,18 @@ CASES = (
     NegativeControl("quoted-data", "INSUFFICIENT_EVIDENCE", (), "no path found",
                     observations=(("source", "artifact", "actor"),)),
     NegativeControl("authorized", "OBSERVED_FLOW", ("source", "actor", "operation", "target"),
-                    "holds every permission", observations=(("source", "actor", "operation", "target"),),
-                    supporting_traces=(0,)),
+                    "holds every permission",
+                    observations=(("source", "actor"), ("actor", "operation"), ("operation", "target")),
+                    supporting_traces=(0, 1, 2),
+                    observed_edges=("actor-reads-source", "actor-invokes-operation", "operation-targets-target")),
     NegativeControl("structural-only", "POTENTIAL_PATH", ("source", "actor", "operation", "target"),
                     "no TraceEvent backs"),
     NegativeControl("insufficient", "INSUFFICIENT_EVIDENCE", (), "no path found within max_hops=2",
                     max_hops=2),
     NegativeControl("blocked", "POTENTIAL_PATH", ("source", "actor", "operation", "target"),
                     "blocked-actor -> blocked-operation",
-                    observations=(("source", "actor"), ("actor", "control")), supporting_traces=(0,)),
+                    observations=(("source", "actor"), ("actor", "control")), supporting_traces=(0,),
+                    observed_edges=("actor-reads-source",)),
 )
 
 
@@ -53,9 +57,12 @@ def test_negative_control(case: NegativeControl, tmp_path: Path) -> None:
 
     for index, observation in enumerate(case.observations):
         node_args = [argument for node in observation for argument in ("--node", f"{case.name}-{node}")]
+        edge_args = []
+        if index < len(case.observed_edges):
+            edge_args = ["--relationship", f"{case.name}-{case.observed_edges[index]}"]
         result = runner.invoke(main, [
             "observe", *database, "--trace-event", f"{case.name}-trace-{index}",
-            "--observed-at", f"2026-11-21T00:00:0{index}Z", *node_args,
+            "--observed-at", f"2026-11-21T00:00:0{index}Z", *node_args, *edge_args,
         ])
         assert result.exit_code == 0, (result.output, result.exception)
 

@@ -61,8 +61,11 @@ silently replaced with a guess.
 ## Promotion rules (the only way a state may change)
 
 - **B does not become C** without a trace event that actually records the
-  behavior, tied by its own stored reference (not inferred from timing
-  alone) to the entities on the path.
+  behavior and a stored reference tying that evidence to each relationship
+  on the path. Use `observe --relationship EDGE_ID` with
+  both endpoints as `--node` arguments. Node-only observations remain recorded
+  as co-observation and do not promote a relationship. Each event backs its
+  named relationship, and events along a route may be independent.
 - **C does not become D** without a policy explicitly identified as
   applicable, and evidence that the observed behavior actually breached
   it — temporal order is never sufficient by itself.

@@ -150,13 +150,22 @@ def authority_command(database_path: str, actor_id: str, operation_id: str) -> N
     multiple=True,
     help="A node id observed in this trace event (repeatable, at least 2).",
 )
-def observe_command(database_path: str, trace_event_id: str, observed_at: str, node_ids: tuple[str, ...]) -> None:
+@click.option("--relationship", "relationship_id", help="ID of the specific structural relationship observed.")
+def observe_command(
+    database_path: str,
+    trace_event_id: str,
+    observed_at: str,
+    node_ids: tuple[str, ...],
+    relationship_id: str | None,
+) -> None:
     """Record a real TraceEvent and link the nodes observed together in
     it (docs/EPISTEMIC_MODEL.md, B -> C evidence). This is the only
     command that lets a path be promoted past structural possibility."""
     if len(node_ids) < 2 or len(set(node_ids)) != len(node_ids):
         click.echo("error: --node requires at least two distinct IDs without repeats", err=True)
         sys.exit(1)
+    if relationship_id is not None and len(node_ids) != 2:
+        raise click.UsageError("--relationship requires exactly two endpoint nodes")
 
     try:
         with GraphStore(database_path) as store, store.transaction():
@@ -173,6 +182,7 @@ def observe_command(database_path: str, trace_event_id: str, observed_at: str, n
                     epistemic_status=EpistemicStatus.FACT,
                     provenance="cli-observe",
                     observed_at=observed_at,
+                    observed_relationship_id=relationship_id,
                 )
     except GraphStoreError as exc:
         click.echo(f"error: {exc}", err=True)

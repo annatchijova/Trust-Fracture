@@ -23,6 +23,7 @@ from trust_fracture.schema import (
     EpistemicStatus,
     NodeType,
     OBSERVATION_ONLY_TYPES,
+    PROPAGATION_RELATIONSHIP_TYPES,
     RelationshipType,
 )
 
@@ -153,7 +154,17 @@ class GraphStore:
         provenance: str,
         run_id: str | None = None,
         observed_at: str | None = None,
+        observed_relationship_id: str | None = None,
     ) -> None:
+        if observed_relationship_id is not None:
+            if rel_type is not RelationshipType.OBSERVED_IN:
+                raise GraphStoreError("only OBSERVED_IN may record an observed relationship ID")
+            endpoints = self._observable_relationship_endpoints(observed_relationship_id)
+            if endpoints is None or source_id not in endpoints:
+                raise GraphStoreError(
+                    f"observed relationship {observed_relationship_id!r} must be a unique "
+                    f"structural relationship incident to node {source_id!r}"
+                )
         if rel_type in OBSERVATION_ONLY_TYPES:
             if epistemic_status is not EpistemicStatus.FACT or observed_at is None:
                 raise GraphStoreError(
@@ -203,6 +214,7 @@ class GraphStore:
             "schema_version": SCHEMA_VERSION,
             "run_id": run_id,
             "observed_at": observed_at,
+            "observed_relationship_id": observed_relationship_id,
         }
         self._db.execute(
             """
@@ -213,7 +225,8 @@ class GraphStore:
                 provenance: $provenance,
                 schema_version: $schema_version,
                 run_id: $run_id,
-                observed_at: $observed_at
+                observed_at: $observed_at,
+                observed_relationship_id: $observed_relationship_id
             }]->(b)
             """
             % rel_type.value,
@@ -298,19 +311,35 @@ class GraphStore:
         ).single()
         return bool(row["n"])
 
-    def common_trace_events(self, node_a_id: str, node_b_id: str) -> tuple[str, ...]:
-        """Every TraceEvent id that both `node_a_id` and `node_b_id` are
-        OBSERVED_IN -- the structural backing Level 3's promotion rule
-        (docs/EPISTEMIC_MODEL.md, B -> C) checks for: an edge between two
-        nodes counts as observed only if a real trace recorded both
-        endpoints together, never from temporal order alone.
-        """
+    def _observable_relationship_endpoints(self, relationship_id: str) -> frozenset[str] | None:
+        rows = self._db.execute(
+            "MATCH (a)-[r]->(b) WHERE r.id = $id "
+            "RETURN a.id AS source, b.id AS target, type(r) AS kind",
+            {"id": relationship_id},
+        ).fetch(2)
+        if len(rows) != 1 or rows[0]["kind"] not in PROPAGATION_RELATIONSHIP_TYPES:
+            return None
+        return frozenset((rows[0]["source"], rows[0]["target"]))
+
+    def common_trace_events(
+        self, node_a_id: str, node_b_id: str, *, relationship_id: str | None = None,
+    ) -> tuple[str, ...]:
+        """Return shared traces, optionally requiring explicit evidence of an edge."""
+        if relationship_id is not None and self._observable_relationship_endpoints(
+            relationship_id
+        ) != frozenset((node_a_id, node_b_id)):
+            return ()
         cursor = self._db.execute(
-            "MATCH (a {id: $a})-[:OBSERVED_IN]->(t:TraceEvent)<-[:OBSERVED_IN]-(b {id: $b}) "
+            "MATCH (a {id: $a})-[left:OBSERVED_IN]->(t:TraceEvent)"
+            "<-[right:OBSERVED_IN]-(b {id: $b}) "
+            "WHERE $edge_id IS NULL OR "
+            "(left.observed_relationship_id = $edge_id AND "
+            "right.observed_relationship_id = $edge_id AND "
+            "left.observed_at = right.observed_at) "
             "WITH DISTINCT t MATCH ()-[membership:OBSERVED_IN]->(t) "
             "WITH t, count(membership) AS total, count(DISTINCT membership.id) AS distinct_ids "
             "WHERE total = distinct_ids RETURN DISTINCT t.id AS id",
-            {"a": node_a_id, "b": node_b_id},
+            {"a": node_a_id, "b": node_b_id, "edge_id": relationship_id},
         )
         return tuple(row["id"] for row in cursor)
 
